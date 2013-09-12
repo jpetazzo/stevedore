@@ -68,6 +68,28 @@ _stevedore_cmd_new () {
     _stevedore_env_build $1
 }
 
+_defcmd url "Generate an URL pointing to an environment. Port is optional."
+_stevedore_cmd_url () {
+    _stevedore_env_check $1
+    ADDR=$($DOCKER inspect $(cat $1/cid) | grep IPAddress | cut -d\" -f4)
+    [ "$ADDR" ] || {
+	echo "You have to enter the environment, otherwise, it has no address."
+	exit 1
+    }
+    if [ "$2" ]
+    then 
+	PORT=$($DOCKER port $(cat $1/cid) $2 2>/dev/null)
+	if [ "$PORT" ]
+	then
+	    echo "http://localhost:$PORT/"
+	else
+	    echo "http://$ADDR:$2/"
+	fi
+    else
+	echo "http://$ADDR/"
+    fi
+}
+
 ##############################################################################
 # Internal functions manipulating environments
 ##############################################################################
