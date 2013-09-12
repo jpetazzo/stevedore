@@ -1,0 +1,191 @@
+#!/bin/sh
+
+[ "$STEVEDORE" ] && {
+    echo "It looks like you are already in environment $STEVEDORE. Aborting."
+    exit 1
+}
+[ "$(which docker)" ] || {
+    echo "Could not find Docker binary. Aborting."
+    exit 1
+}
+DOCKER="sudo docker"
+SDROOT=~/.stevedore
+mkdir -p "$SDROOT"
+cd "$SDROOT"
+
+HELP="stevedore - containerize your development environments."
+_defcmd () {
+    HELP="$(printf "%s\n%-10s %s\n\n" "$HELP" "$1" "$2")"
+}
+
+##############################################################################
+# Commands
+##############################################################################
+
+_defcmd destroy "Destroy an environment. This cannot be undone."
+_stevedore_cmd_destroy () {
+    _stevedore_env_stop $1
+    _stevedore_env_destroy $1
+}
+
+_defcmd edit "Launch your editor ($VISUAL) to edit and rebuild an environment."
+_stevedore_cmd_edit () {
+    _stevedore_env_check $1
+    $VISUAL $1/Dockerfile
+    _stevedore_env_build $1
+}
+
+_defcmd enter "Enter a given environment."
+_stevedore_cmd_enter () {
+    _stevedore_env_enter $1
+}
+
+_defcmd help "Show this help message."
+_stevedore_cmd_help () {
+    echo "$HELP"
+}
+
+_defcmd id "Show the container id of an environment."
+_stevedore_cmd_id () {
+    _stevedore_env_check $1
+    cat $1/cid
+}
+
+_defcmd list "List existing environments."
+_stevedore_cmd_list () {
+    ls -1
+}
+
+_defcmd log "Show build log for an environment."
+_stevedore_cmd_log () {
+    _stevedore_env_check $1
+    cat $1/build.log
+}
+
+_defcmd new "Create a new environment."
+_stevedore_cmd_new () {
+    _stevedore_env_new $1
+    _stevedore_env_build $1
+}
+
+##############################################################################
+# Internal functions manipulating environments
+##############################################################################
+
+_stevedore_env_build () {
+    if $DOCKER build -t $1 $1 | tee $1/build.log | grep ^Step
+    then
+	echo "Build successful."
+    else
+	echo "Build failed. See full logs with 'stevedore $1 log'."
+    fi
+    [ -f $1/cid ] && {
+	echo "Restarting existing container..."
+	$DOCKER kill $(cat $1/cid) >/dev/null
+    }
+    $DOCKER run -h stevedore-$1 -d -t -i -v $HOME:$HOME $1 > $1/cid    
+}
+
+_stevedore_env_check () {
+    [ "$1" ] || {
+	echo "Must specify environment name."
+	exit 1
+    }
+    [ -d $1 ] || {
+	echo "Environment does not exist."
+	exit 1
+    }
+    [ -f $1/cid ] || {
+	echo "Invalid or corrupt environment: cid file is missing."
+	exit 1
+    }
+    [ -f $1/Dockerfile ] || {
+	echo "Invalid or corrupt environment: Dockerfile is missing."
+	exit 1
+    }
+    $DOCKER images -q $1 | grep -q . || {
+	echo "Invalid or corrupt environment: Docker image is missing."
+	exit 1
+    }
+}
+
+_stevedore_env_destroy () {
+    _stevedore_env_check $1
+    echo -n "Deleting container: "
+    $DOCKER rm $(cat $1/cid)
+    echo "Deleting tagged images..."
+    $DOCKER rmi $1
+    rm -rf $1
+    echo "Done."
+}
+
+_stevedore_env_enter () {
+    _stevedore_env_check $1
+    CID=$(cat $1/cid)
+    $DOCKER inspect $CID | grep -q Running...true || {
+	$DOCKER start $CID >/dev/null
+	sleep 0.2
+    }
+    echo "Press ENTER to enter environment $1."
+    $DOCKER attach $CID
+    echo "Exited environment $1."
+}
+
+_stevedore_env_new () {
+    [ "$1" ] || {
+	echo "Must specify environment name."
+	exit 1
+    }
+    [ -d "$1" ] && {
+	echo "Environment $1 already exists."
+	exit 1
+    }
+    $DOCKER images -q $1 | grep -q . && {
+	echo "Sorry, a Docker image named $1 already exists."
+	echo "Please pick another one."
+	exit 1
+    }
+    mkdir "$1"
+    cat >$1/Dockerfile <<EOF
+FROM stevedore
+RUN echo $(getent passwd $(id -u)) >> /etc/passwd
+RUN echo $(getent group $(id -g)) >> /etc/group
+RUN echo "$USER ALL=(ALL) NOPASSWD: ALL" >/etc/sudoers.d/$USER
+RUN chmod 0440 /etc/sudoers.d/$USER
+##############################################################################
+# Enter custom Dockerfile commands here.
+#RUN apt-get -qy install ...
+##############################################################################
+WORKDIR $HOME
+ENV HOME $HOME
+ENV STEVEDORE $1
+USER $USER
+ENTRYPOINT ["$SHELL", "-i", "-l"]
+EOF
+}
+
+_stevedore_env_stop () {
+    _stevedore_env_check $1
+    $DOCKER kill $(cat $1/cid) >/dev/null
+    $DOCKER wait $(cat $1/cid) >/dev/null
+}
+
+##############################################################################
+# "Main"
+##############################################################################
+
+if [ "$1" ]
+then
+    CMD=$1
+    shift
+else
+    CMD=help
+fi
+
+FUN=_stevedore_cmd_$CMD
+type $FUN >/dev/null || {
+    echo "Invalid command: $CMD."
+    exit 1
+}
+
+$FUN "$@"
