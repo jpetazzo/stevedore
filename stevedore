@@ -18,6 +18,11 @@ _defcmd () {
     HELP="$(printf "%s\n%-10s %s\n\n" "$HELP" "$1" "$2")"
 }
 
+DOCKERFILE="FROM ubuntu
+RUN apt-get -q update
+RUN apt-get -qy install sudo vim emacs python ruby
+"
+
 ##############################################################################
 # Commands
 ##############################################################################
@@ -59,6 +64,22 @@ _defcmd id "Show the container id of an environment."
 _stevedore_cmd_id () {
     _stevedore_env_check $1
     cat $1/cid
+}
+
+_defcmd init "Rebuild the stevedore base image (normally done automatically)."
+_stevedore_cmd_init () {
+    BUILDDIR=/tmp/stevedore.$$
+    mkdir $BUILDDIR
+    echo "$DOCKERFILE" > $BUILDDIR/Dockerfile
+    $DOCKER build -t stevedore $BUILDDIR | tee $BUILDDIR/log | grep ^Step
+    if tail -n 1 $BUILDDIR/log | grep -q Successfully
+    then
+	echo "Successfully created stevedore base image."
+	rm -rf $BUILDDIR
+    else
+	echo "Build failed. Check $BUILDDIR/log for details."
+	exit 1
+    fi
 }
 
 _defcmd list "List existing environments."
@@ -120,7 +141,12 @@ _stevedore_cmd_url () {
 ##############################################################################
 
 _stevedore_env_build () {
-    if $DOCKER build -t $1 $1 | tee $1/build.log | grep ^Step
+    $DOCKER images -q stevedore | grep -q . || {
+	echo "The stevedore base image was not found; building it now."
+	_stevedore_cmd_init
+    }
+    $DOCKER build -t $1 $1 | tee $1/build.log | grep ^Step
+    if tail -n 1 $1/build.log | grep -q Successfully
     then
 	echo "Build successful."
     else
@@ -218,7 +244,8 @@ EOF
 }
 
 _stevedore_env_start () {
-    _stevedore_env_check $1
+    # Note: don't check env validity, because before first start, environment
+    # is not valid yet.
     $DOCKER run -h stevedore-$1 -d -t -i -v $HOME:$HOME $1 > $1/cid
 }
 
