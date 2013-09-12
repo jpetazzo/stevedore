@@ -68,6 +68,12 @@ _stevedore_cmd_new () {
     _stevedore_env_build $1
 }
 
+_defcmd rebuild "Restore an environment to the state defined by its Dockerfile."
+_stevedore_cmd_rebuild () {
+    _stevedore_env_check $1
+    _stevedore_env_build $1
+}
+
 _defcmd url "Generate an URL pointing to an environment. Port is optional."
 _stevedore_cmd_url () {
     _stevedore_env_check $1
@@ -177,6 +183,10 @@ RUN chmod 0440 /etc/sudoers.d/$USER
 ##############################################################################
 # Enter custom Dockerfile commands here.
 #RUN apt-get -qy install ...
+#ADD http://shipyardassets.s3.amazonaws.com/requirements.txt /
+#RUN pip install -r /requirements.txt
+#EXPOSE 4000
+#ENV HYPERLOOP_SPEED 850
 ##############################################################################
 WORKDIR $HOME
 ENV HOME $HOME

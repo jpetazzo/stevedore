@@ -42,11 +42,26 @@ to get a root shell, hack away at your `sources.list`, `apt-get install`
 some stuff, etc., without touching your host system. Neato.
 
 
-## Advanced use
+## Let me sing you the song of my Dockerfile
 
-The environment is built using a Dockerfile. 
+The environment is built using a Dockerfile. If you are familiar with
+Dockerfiles, you can edit it with `stevedore edit`. This will start your
+favorite editor (actually, `$VISUAL`), and after editing the file, it
+will rebuild the environment and restart it. The default Dockerfile
+contains some example of commands that you can insert to get you started.
 
-FIXME
+You can also `stevedore rebuild` to rebuild the environment without
+going through the editor.
+
+**WARNING:** when you use `stevedore edit` or `stevedore rebuild`,
+it will reset the environment to the file described by the Dockerfile!
+All customizations (basically, things that you did as root, or outside
+of your `$HOME`) will be lost! This is not a bug, this is a feature.
+(Really.)
+
+To unclutter the output a bit, Stevedore only display build steps,
+not the output of the build step themselves. If you want to see the
+full output of a build, you can use `stevedore log`.
 
 
 ## A word about the network sandboxing
@@ -70,7 +85,7 @@ to reach your environment.
 ## Full list of commands
 
 ```bash
-$ stevedore help
+$ stevedore
 stevedore - containerize your development environments.
 destroy    Destroy an environment. This cannot be undone.
 edit       Launch your editor (emacs) to edit and rebuild an environment.
@@ -80,4 +95,6 @@ id         Show the container id of an environment.
 list       List existing environments.
 log        Show build log for an environment.
 new        Create a new environment.
+rebuild    Restore an environment to the state defined by its Dockerfile.
+url        Generate an URL pointing to an environment. Port is optional.
 ```
