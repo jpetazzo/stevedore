@@ -22,6 +22,16 @@ _defcmd () {
 # Commands
 ##############################################################################
 
+# Do not expose checkpoint and rollback because commit is broken.
+# (It does not propagate EXPOSE, ENTRYPOINT, etc.)
+#_defcmd checkpoint "Record the current state of an environment."
+_stevedore_cmd_checkpoint () {
+    _stevedore_env_check $1
+    N=$(wc -l $1/history)
+    $DOCKER commit -m "Stevedore Checkpoint #$N" $(cat $1/cid) $1 >> $1/history
+    echo "Stored checkpoint #$N for $1."
+}
+
 _defcmd destroy "Destroy an environment. This cannot be undone."
 _stevedore_cmd_destroy () {
     _stevedore_env_stop $1
@@ -74,6 +84,15 @@ _stevedore_cmd_rebuild () {
     _stevedore_env_build $1
 }
 
+# Do not expose checkpoint and rollback because commit is broken.
+# (It does not propagate EXPOSE, ENTRYPOINT, etc.)
+#_defcmd rollback "Restore an environment to the last checkpointed state."
+_stevedore_cmd_rollback () {
+    _stevedore_env_check $1
+    _stevedore_env_stop $1
+    _stevedore_env_start $1
+}
+
 _defcmd url "Generate an URL pointing to an environment. Port is optional."
 _stevedore_cmd_url () {
     _stevedore_env_check $1
@@ -106,12 +125,14 @@ _stevedore_env_build () {
 	echo "Build successful."
     else
 	echo "Build failed. See full logs with 'stevedore $1 log'."
+	exit 1
     fi
+    $DOCKER images -q $1 >> $1/history
     [ -f $1/cid ] && {
 	echo "Restarting existing container..."
-	$DOCKER kill $(cat $1/cid) >/dev/null
+	_stevedore_env_stop $1
     }
-    $DOCKER run -h stevedore-$1 -d -t -i -v $HOME:$HOME $1 > $1/cid    
+    _stevedore_env_start $1
 }
 
 _stevedore_env_check () {
@@ -194,6 +215,11 @@ ENV STEVEDORE $1
 USER $USER
 ENTRYPOINT ["$SHELL", "-i", "-l"]
 EOF
+}
+
+_stevedore_env_start () {
+    _stevedore_env_check $1
+    $DOCKER run -h stevedore-$1 -d -t -i -v $HOME:$HOME $1 > $1/cid
 }
 
 _stevedore_env_stop () {
