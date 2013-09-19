@@ -82,6 +82,10 @@ pip install django
 apt-get install libxml2
 ```
 
+When you exit the environment, if the history is not empty, Stevedore
+will suggest you to run `sudohist` to review the commands that have been
+executed.
+
 The sudo history is cleared each time the environment is rebuilt.
 
 

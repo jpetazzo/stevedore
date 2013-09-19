@@ -214,6 +214,10 @@ _stevedore_env_enter () {
     echo "Press ENTER to enter environment $1."
     $DOCKER attach $CID
     echo "Exited environment $1."
+    [ -f $1/sudohist ] && {
+	echo "You ran some commands with sudo."
+	echo "I recommend that you review them with 'stevedore sudohist $1'".
+    }
 }
 
 _stevedore_env_new () {
