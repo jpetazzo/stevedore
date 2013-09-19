@@ -150,7 +150,7 @@ _stevedore_env_build () {
     then
 	echo "Build successful."
     else
-	echo "Build failed. See full logs with 'stevedore $1 log'."
+	echo "Build failed. See full logs with 'stevedore log $1'."
 	exit 1
     fi
     $DOCKER images -q $1 >> $1/history
