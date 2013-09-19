@@ -63,6 +63,14 @@ To unclutter the output a bit, Stevedore only display build steps,
 not the output of the build step themselves. If you want to see the
 full output of a build, you can use `stevedore log`.
 
+Also, you will notice that `stevedore edit` does not show you all
+the build steps: the Dockerfile is split between two parts, a `pre`
+and a `post` part; the `pre` part is the one you can customize,
+and the `post` part contains all the stuff needed by Stevedore to
+operate. Both parts are concatenated before Docker builds the container.
+Normally, you won't need to edit the `post` part; but if you want to
+do it anyway, it is in `~/.stevedore/<env_name>/Dockerfile.post`.
+
 
 ## Automatic sudo history
 
@@ -77,16 +85,17 @@ For instance, if you entered environment `python4`, and did `sudo pip
 install django`, then `sudo apt-get install libxml2`, you can review
 those commands with `stevedore sudohist python4`, which will show:
 
-```
-pip install django
-apt-get install libxml2
-```
+    pip install django
+    apt-get install libxml2
 
 When you exit the environment, if the history is not empty, Stevedore
-will suggest you to run `sudohist` to review the commands that have been
-executed.
+will suggest you to run `stevedore sudohist` to review the commands
+that have been executed. You can then run `stevedore autoadd` to
+automatically add those commands, prefixed with `RUN`, to the Dockerfile.
+If you do that, the environment will be automatically rebuilt.
 
-The sudo history is cleared each time the environment is rebuilt.
+The sudo history is cleared each time the environment is rebuilt
+(through `autoadd` or through the normal `rebuild` command).
 
 
 ## A word about the network sandboxing

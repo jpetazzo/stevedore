@@ -27,6 +27,13 @@ RUN apt-get -qy install sudo vim emacs python ruby
 # Commands
 ##############################################################################
 
+_defcmd autoadd "Add commands executed with 'sudo' to Dockerfile, and rebuild."
+_stevedore_cmd_autoadd () {
+    _stevedore_env_check $1
+    _stevedore_env_genrun $1 >> $1/Dockerfile.pre
+    _stevedore_env_build $1
+}
+
 # Do not expose checkpoint and rollback because commit is broken.
 # (It does not propagate EXPOSE, ENTRYPOINT, etc.)
 #_defcmd checkpoint "Record the current state of an environment."
@@ -46,7 +53,7 @@ _stevedore_cmd_destroy () {
 _defcmd edit "Launch your editor ($VISUAL) to edit and rebuild an environment."
 _stevedore_cmd_edit () {
     _stevedore_env_check $1
-    $VISUAL $1/Dockerfile
+    $VISUAL $1/Dockerfile.pre
     _stevedore_env_build $1
 }
 
@@ -118,8 +125,17 @@ _defcmd sudohist "Show history of commands that have been started with sudo."
 _stevedore_cmd_sudohist () {
     _stevedore_env_check $1
     if [ -f $1/sudohist ]
-    then cat $1/sudohist
-    else echo '# No command found in history.'
+    then
+	echo "# sudo history:"
+	cat $1/sudohist
+	grep -q ^[^-] $1/sudohist && {
+	    echo "# I suggest that you add the following to your Dockerfile:"
+	    _stevedore_env_genrun $1
+	    echo "# To add those lines to your Dockerfile and rebuild the"
+	    echo "# environment, run 'stevedore autoadd $1'."
+	}
+    else
+	echo "# No command found in history."
     fi
 }
 
@@ -154,6 +170,7 @@ _stevedore_env_build () {
 	echo "The stevedore base image was not found; building it now."
 	_stevedore_cmd_init
     }
+    cat $1/Dockerfile.pre $1/Dockerfile.post > $1/Dockerfile
     $DOCKER build -t $1 $1 | tee $1/build.log | grep ^Step
     if tail -n 1 $1/build.log | grep -q Successfully
     then
@@ -220,6 +237,15 @@ _stevedore_env_enter () {
     }
 }
 
+_stevedore_env_genrun () {
+    _stevedore_env_check $1
+    grep ^[^-] $1/sudohist | {
+	while read line
+	do echo RUN $line
+	done
+    }
+}
+
 _stevedore_env_new () {
     [ "$1" ] || {
 	echo "Must specify environment name."
@@ -245,15 +271,8 @@ echo "\$@" >> \$HOME/.stevedore/\$STEVEDORE/sudohist
 exec sudo.real "\$@"
 EOF
     chmod +x $1/sudo
-    cat >$1/Dockerfile <<EOF
+    cat >$1/Dockerfile.pre <<EOF
 FROM stevedore
-RUN echo $(getent passwd $(id -u)) >> /etc/passwd
-RUN echo $(getent group $(id -g)) >> /etc/group
-RUN echo "$USER ALL=(ALL) NOPASSWD: ALL" >/etc/sudoers.d/$USER
-RUN chmod 0440 /etc/sudoers.d/$USER
-RUN cp -a $(which sudo) $(which sudo).real
-ADD sudo /sudo.tmp
-RUN mv /sudo.tmp $(which sudo)
 ##############################################################################
 # Enter custom Dockerfile commands here.
 #RUN apt-get -qy install ...
@@ -262,6 +281,15 @@ RUN mv /sudo.tmp $(which sudo)
 #EXPOSE 4000
 #ENV HYPERLOOP_SPEED 850
 ##############################################################################
+EOF
+    cat >$1/Dockerfile.post <<EOF
+RUN echo $(getent passwd $(id -u)) >> /etc/passwd
+RUN echo $(getent group $(id -g)) >> /etc/group
+RUN echo "$USER ALL=(ALL) NOPASSWD: ALL" >/etc/sudoers.d/$USER
+RUN chmod 0440 /etc/sudoers.d/$USER
+RUN cp -a $(which sudo) $(which sudo).real
+ADD sudo /sudo.tmp
+RUN mv /sudo.tmp $(which sudo)
 WORKDIR $HOME
 ENV HOME $HOME
 ENV STEVEDORE $1
