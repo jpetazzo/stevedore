@@ -89,7 +89,7 @@ _stevedore_cmd_list () {
 
 _defcmd log "Show build log for an environment."
 _stevedore_cmd_log () {
-    _stevedore_env_check $1
+    # Do not check environment validity; in case the initial build failed.
     cat $1/build.log
 }
 
@@ -112,6 +112,15 @@ _stevedore_cmd_rollback () {
     _stevedore_env_check $1
     _stevedore_env_stop $1
     _stevedore_env_start $1
+}
+
+_defcmd sudohist "Show history of commands that have been started with sudo."
+_stevedore_cmd_sudohist () {
+    _stevedore_env_check $1
+    if [ -f $1/sudohist ]
+    then cat $1/sudohist
+    else echo '# No command found in history.'
+    fi
 }
 
 _defcmd url "Generate an URL pointing to an environment. Port is optional."
@@ -150,10 +159,11 @@ _stevedore_env_build () {
     then
 	echo "Build successful."
     else
-	echo "Build failed. See full logs with 'stevedore $1 log'."
+	echo "Build failed. See full logs with 'stevedore log $1'."
 	exit 1
     fi
     $DOCKER images -q $1 >> $1/history
+    rm -f $1/sudohist
     [ -f $1/cid ] && {
 	echo "Restarting existing container..."
 	_stevedore_env_stop $1
@@ -221,12 +231,25 @@ _stevedore_env_new () {
 	exit 1
     }
     mkdir "$1"
+    cat >$1/sudo <<EOF
+#!/bin/sh
+[ "\$STEVEDORE" ] || {
+    echo '\$STEVEDORE environment variable not found. Aborting.'
+    exit 1
+}
+echo "\$@" >> \$HOME/.stevedore/\$STEVEDORE/sudohist
+exec sudo.real "\$@"
+EOF
+    chmod +x $1/sudo
     cat >$1/Dockerfile <<EOF
 FROM stevedore
 RUN echo $(getent passwd $(id -u)) >> /etc/passwd
 RUN echo $(getent group $(id -g)) >> /etc/group
 RUN echo "$USER ALL=(ALL) NOPASSWD: ALL" >/etc/sudoers.d/$USER
 RUN chmod 0440 /etc/sudoers.d/$USER
+RUN cp -a $(which sudo) $(which sudo).real
+ADD sudo /sudo.tmp
+RUN mv /sudo.tmp $(which sudo)
 ##############################################################################
 # Enter custom Dockerfile commands here.
 #RUN apt-get -qy install ...

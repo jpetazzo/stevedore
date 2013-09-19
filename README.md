@@ -64,6 +64,27 @@ not the output of the build step themselves. If you want to see the
 full output of a build, you can use `stevedore log`.
 
 
+## Automatic sudo history
+
+Stevedore replaces `sudo` with a tiny wrapper which will log each execution
+of `sudo`. You can see the log file by running `stevedore sudohist`.
+
+This is very helpful to keep track of the commands which potentially
+altered your development environment, and are therefore good candidates
+for inclusion into the Dockerfile in a `RUN` statement.
+
+For instance, if you entered environment `python4`, and did `sudo pip
+install django`, then `sudo apt-get install libxml2`, you can review
+those commands with `stevedore sudohist python4`, which will show:
+
+```
+pip install django
+apt-get install libxml2
+```
+
+The sudo history is cleared each time the environment is rebuilt.
+
+
 ## A word about the network sandboxing
 
 Each environment runs in its own sandboxed network space. This means
@@ -96,5 +117,6 @@ list       List existing environments.
 log        Show build log for an environment.
 new        Create a new environment.
 rebuild    Restore an environment to the state defined by its Dockerfile.
+sudohist   Show history of commands that have been started with sudo.
 url        Generate an URL pointing to an environment. Port is optional.
 ```
