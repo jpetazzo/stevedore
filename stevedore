@@ -27,6 +27,18 @@ RUN apt-get -qy install sudo vim emacs python ruby
 # Commands
 ##############################################################################
 
+_defcmd args "Get/set arguments appended to docker run."
+_stevedore_cmd_args () {
+    _stevedore_env_check $1
+    [ -f $1/args ] || {
+  touch $1/args
+    }
+    [ -z "$2" ] || {
+  echo $2 > $1/args
+    }
+    cat $1/args
+}
+
 _defcmd autoadd "Add commands executed with 'sudo' to Dockerfile, and rebuild."
 _stevedore_cmd_autoadd () {
     _stevedore_env_check $1
@@ -148,7 +160,7 @@ _stevedore_cmd_url () {
 	exit 1
     }
     if [ "$2" ]
-    then 
+    then
 	PORT=$($DOCKER port $(cat $1/cid) $2 2>/dev/null)
 	if [ "$PORT" ]
 	then
@@ -301,7 +313,13 @@ EOF
 _stevedore_env_start () {
     # Note: don't check env validity, because before first start, environment
     # is not valid yet.
-    $DOCKER run -h stevedore-$1 -d -t -i -v $HOME:$HOME $1 > $1/cid
+    if [ -f "$1/args" ]
+    then
+        ARGS=$(cat $1/args)
+    else
+        ARGS=""
+    fi
+    $DOCKER run -h stevedore-$1 -d -t -i -v $HOME:$HOME $ARGS $1 > $1/cid
 }
 
 _stevedore_env_stop () {
