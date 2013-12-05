@@ -10,6 +10,7 @@
 }
 DOCKER="sudo docker"
 SDROOT=~/.stevedore
+VISUAL=${VISUAL:-vi}
 mkdir -p "$SDROOT"
 cd "$SDROOT"
 
